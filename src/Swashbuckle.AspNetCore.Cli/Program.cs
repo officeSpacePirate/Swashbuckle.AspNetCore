@@ -13,7 +13,7 @@ namespace Swashbuckle.AspNetCore.Cli
 {
     public class Program
     {
-        static int Main(string[] args)
+        static void Main(string[] args)
         {
             // Helper to simplify command line parsing etc.
             var runner = new CommandRunner("dotnet swagger", "Swashbuckle (Swagger) Command Line Tools", Console.Out);
@@ -96,7 +96,9 @@ namespace Swashbuckle.AspNetCore.Cli
                 });
             });
 
-            return runner.Run(args);
+            var retVal = runner.Run(args);
+            
+            Environment.Exit(retVal);
         }
 
         private static string EscapePath(string path)
