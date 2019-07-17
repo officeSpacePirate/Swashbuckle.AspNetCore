@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Reflection;
 using System.Diagnostics;
 using System.IO;
@@ -8,8 +8,9 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.OpenApi.Writers;
 using Microsoft.AspNetCore;
 using Swashbuckle.AspNetCore.Swagger;
+using System.Linq;
 
-namespace Swashbuckle.AspNetCore.Cli
+namespace Platform.Swashbuckle.AspNetCore.Cli
 {
     public class Program
     {
@@ -64,9 +65,13 @@ namespace Swashbuckle.AspNetCore.Cli
                     // 1) Configure host with provided startupassembly
                     var startupAssembly = AssemblyLoadContext.Default.LoadFromAssemblyPath(
                         Path.Combine(Directory.GetCurrentDirectory(), namedArgs["startupassembly"]));
-                    var host = WebHost.CreateDefaultBuilder()
-                        .UseStartup(startupAssembly.FullName)
-                        .Build();
+
+                    var webHostFactory = GetISwaggerWebHostFactoryInstance(startupAssembly);
+
+                    var host = webHostFactory != null ? webHostFactory.BuildWebHost() :
+                        WebHost.CreateDefaultBuilder()
+                               .UseStartup(startupAssembly.FullName)
+                               .Build();
 
                     // 2) Retrieve Swagger via configured provider
                     var swaggerProvider = host.Services.GetRequiredService<ISwaggerProvider>();
@@ -97,8 +102,30 @@ namespace Swashbuckle.AspNetCore.Cli
             });
 
             var retVal = runner.Run(args);
-            
+
             Environment.Exit(retVal);
+        }
+
+        protected static ISwaggerWebHostFactory GetISwaggerWebHostFactoryInstance(Assembly assembly)
+        {
+            var factoryTypes = assembly.DefinedTypes.Where(ti => ti.ImplementedInterfaces.Contains(typeof(ISwaggerWebHostFactory)));
+            if (factoryTypes.Count() > 1) throw new InvalidOperationException("Multiple ISwaggerWebHostFactory implementations.");
+            if (!factoryTypes.Any()) return null;
+            var factoryType = factoryTypes.Single();
+            Console.WriteLine($"ISwaggerWebHostFactory factory found. Using {factoryType.FullName}.");
+            return assembly.CreateInstance(factoryType.FullName) as ISwaggerWebHostFactory;
+        }
+
+        /// <summary>
+        /// Parses a given option value into a specified enumeration value
+        /// </summary>
+        /// <param name="optionValue">Expects the string representation of a valid Enumeration value,
+        /// anything else defaults to the Enumeration's default value</param>
+        protected static T ParseEnum<T>(string optionValue) where T : struct, IConvertible
+        {
+            var isParsed = Enum.TryParse(optionValue, true, out T parsed);
+
+            return isParsed ? parsed : default(T);
         }
 
         private static string EscapePath(string path)
